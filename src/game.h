@@ -31,6 +31,12 @@ void game_deinit(void);
 void game_restart(void);
 
 /**
+ * @brief Restart game.
+ *
+ */
+void round_restart(void);
+
+/**
  * @brief Draw game.
  *
  */

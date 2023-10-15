@@ -21,16 +21,27 @@ typedef struct paddle {
 } paddle_t;
 
 static ball_t ball;
-#define MAX_BALL_SPEED 60
+#define MAX_BALL_SPEED 80
 const int ball_max_speed = MAX_BALL_SPEED;
 const float paddle_speed = MAX_BALL_SPEED * 5;
 static paddle_t paddle[2];
 int score[] = {0,0};
 
+float LastDistanceY = 0.0f;
+int MaxGameScore = 30;
+
 static Vector2 paddle_dims = {.x=10,.y=40};
 
-#define REWARD_CLOSE +10
-#define REWARD_FAR -10
+#define REWARD_CLOSE_Y +10
+#define REWARD_FAR_Y -10
+#define REWARD_SAME_Y 0
+
+#define REWARD_WIN +250
+#define REWARD_LOSE -250
+#define REWARD_CORNERHIT +100
+#define REWARD_MIDHIT +25
+
+int CurrentReward = 0;
 
 int check_collision(ball_t a, paddle_t b) {
 	if (a.x > b.x + b.w) {
@@ -61,13 +72,17 @@ void move_ball(float dt) {
 	if (ball.x < 0) {
 		
 		score[1] += 1;
-		game_restart();
+		//Get win reward
+		CurrentReward += REWARD_WIN;
+		round_restart();
 	}
 
 	if (ball.x > w - ball.w) { 
 		
 		score[0] += 1;
-		game_restart();
+		//Get lose reward
+		CurrentReward += REWARD_LOSE;
+		round_restart();
 	}
 
 	if (ball.y < 0 || ball.y > h - ball.h) {
@@ -101,6 +116,23 @@ void move_ball(float dt) {
 			
 			//change ball angle based on where on the paddle it hit
 			int hit_pos = (paddle[i].y + paddle[i].h) - ball.y;
+
+			if(i == 1)
+			{
+				//Get hit reward
+				if(hit_pos >= 0 && hit_pos < 14)
+				{
+					CurrentReward += REWARD_CORNERHIT;
+				}
+				else if(hit_pos >= 14 && hit_pos < 46)
+				{
+					CurrentReward += REWARD_MIDHIT;
+				}
+				else if(hit_pos >= 46 && hit_pos <= 60)
+				{
+					CurrentReward += REWARD_CORNERHIT;
+				}
+			}
 
 			if (hit_pos >= 0 && hit_pos < 7) {
 				ball.dy = 4;
@@ -171,12 +203,13 @@ void move_paddle(int dir,int paddle_id){
         paddle[paddle_id].y = 0;
     }
 }
+
 void move_paddle_ai(float dt, int paddle_id) {
 	int center = paddle[paddle_id].y + paddle[paddle_id].h * 0.5f;
 	int screen_center = GetScreenHeight() - paddle[paddle_id].h * 0.5f;
     SetRandomSeed(time(0));
-    int r_dir = GetRandomValue(1,4);
-    int dir = ball.dy > 0 ? r_dir  : -r_dir; 
+    int r_dir = GetRandomValue(1,1);
+    int dir = ball.dy > 0 ? r_dir  : -r_dir;
     if(dir < 0 && paddle[paddle_id].y < ball.y){
         dir = r_dir;
     }
@@ -184,6 +217,7 @@ void move_paddle_ai(float dt, int paddle_id) {
     if(dir > 0 && paddle[paddle_id].y > ball.y){
         dir = -r_dir;
     }
+
 	move_paddle(dir,paddle_id);
 }
 
@@ -204,39 +238,48 @@ static size_t gridsize = 64;
 static double lastTime = 0.0;
 #define NUM_GRID_SQUARES 8
 static int isPlayer = 0;
-void game_draw(void){
 
+void game_draw(void)
+{
     float dt = GetTime() - lastTime;
     lastTime = GetTime();
-	if(IsKeyReleased(KEY_P)){
+
+	if(IsKeyReleased(KEY_P))
+	{
 		isPlayer = !isPlayer;
 	}
-	if(isPlayer){
-		if(IsKeyDown(KEY_UP)){
+	if(isPlayer)
+	{
+		if(IsKeyDown(KEY_UP))
+		{
 			move_paddle(-1,0);
 		}
-		if(IsKeyDown(KEY_DOWN)){
+		if(IsKeyDown(KEY_DOWN))
+		{
 			move_paddle(1,0);
 		}
 	}
-	else {
+	else 
+	{
 		move_paddle_ai(dt,0);
 	}
-    move_paddle_ai(dt,1);
+    //move_paddle_ai(dt,1);
     move_ball(dt);
 
     ClearBackground(GetColor(0x000000FF));
     BeginDrawing();
     int w = GetRenderWidth();
     int h = GetRenderHeight();
-    for(int i = 0; i < 2;++i){
+    for(int i = 0; i < 2;++i)
+	{
         DrawRectangle(paddle[i].x,paddle[i].y,paddle[i].w,paddle[i].h,GetColor(0xFFFFFFFF));
     }
 
 	// Draw lines
 	float ww = 5;
 	Rectangle rect = {w * 0.5f - ww * 0.5f,paddle_dims.y * 0.25f,ww,paddle_dims.y - paddle_dims.y * 0.3f};
-	for(int i = 0;rect.y < h;rect.y = i * (rect.height * 2)){
+	for(int i = 0;rect.y < h;rect.y = i * (rect.height * 2))
+	{
 		DrawRectangleRec(rect,WHITE);
 		++i;
 	}
@@ -256,8 +299,15 @@ void game_draw(void){
  * @brief Restart game.
  *
  */
-void game_restart(void){
+void game_restart(void)
+{
+	round_restart();
+	score[0] = 0;
+	score[1] = 0;
+}
 
+void round_restart(void)
+{
     int w = GetScreenWidth();
     int h = GetScreenHeight();
     ball.x = w * 0.5f - paddle_dims.x;
@@ -277,6 +327,10 @@ void game_restart(void){
 	paddle[1].w = paddle_dims.x;
 	paddle[1].h = paddle_dims.y;
 
+	//Init the last distance between the ball and the paddle
+	float PaddleY = paddle[1].y + paddle[1].h * 0.5f;
+	float BallY = ball.y + ball.h * 0.5f;
+	LastDistanceY = fabs(PaddleY - BallY);
 }
 
 /**
@@ -285,23 +339,21 @@ void game_restart(void){
  * @param move Player move: IDLE, UP, DOWN, LEFT, or RIGHT.
  *
  */
-void game_apply_move( uint8_t move)
+void game_apply_move(uint8_t move)
 {
 	switch(move)
 	{
-	case 0:
+	case IDLE:
 		break;
-	case 1:
-		
+	case UP:
+		move_paddle(-1, 1);
 		break;
-	case 2:
-		
+	case DOWN:
+		move_paddle(1, 1);
 		break;
-	case 3:
-		
+	case LEFT:
 		break;
-	case 4:
-		
+	case RIGHT:
 		break;
 	}
 }
@@ -314,7 +366,8 @@ void game_apply_move( uint8_t move)
  */
 bool game_is_ended(void)
 {
-
+	//Check if a player has the score
+	if(score[0] >= MaxGameScore || score[1] >= MaxGameScore) return true;
     return false;
 }
 
@@ -325,7 +378,19 @@ bool game_is_ended(void)
  */
 uint16_t game_get_state(void)
 {
-    return 0;
+	int16_t state = 0;
+    
+    float PaddleCenterY = paddle[1].y + paddle[1].h * 0.5f;
+    float BallCenterY = ball.y + ball.h * 0.5f;
+
+	//State on top with the ball
+    state |= (BallCenterY > PaddleCenterY) << 0;
+	//State align with the ball
+	state |= (BallCenterY == PaddleCenterY) << 1;
+	//State on bottom with the ball
+	state |= (BallCenterY < PaddleCenterY) << 2;
+
+    return state;
 }
 
 /**
@@ -335,5 +400,31 @@ uint16_t game_get_state(void)
  */
 int16_t game_get_reward(void)
 {
-    return 0;
+	//Get the current reward and reset it
+	int TempCurrentReward = CurrentReward;
+	CurrentReward = 0;
+
+	//Get the current distance between the ball and the paddle
+	float PaddleY = paddle[1].y + paddle[1].h * 0.5f;
+	float BallY = ball.y + ball.h * 0.5f;
+	float CurrDistanceY = fabs(PaddleY - BallY);
+
+	//Check if the paddle is closer then the last frame
+	if(CurrDistanceY < LastDistanceY)
+	{
+		TempCurrentReward += REWARD_CLOSE_Y;
+	}
+	//Check if the paddle is farther then the last frame
+	else if(CurrDistanceY > LastDistanceY)
+	{
+		TempCurrentReward += REWARD_FAR_Y;
+	}
+	//Check if the paddle is the same distance then the last frame
+	else if(CurrDistanceY == LastDistanceY)
+	{
+		TempCurrentReward += REWARD_SAME_Y;
+	}
+
+	LastDistanceY = CurrDistanceY;
+	return TempCurrentReward;
 }

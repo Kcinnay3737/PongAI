@@ -370,29 +370,34 @@ void raylib_start(void){
 	 							 .params = &qtable_conf};
 
 	qlearn_t *qlearn = qlearn_init(&qlearn_conf);
+
+    //qlearn_load_table(qlearn, "Save.txt");
     
-    while (!WindowShouldClose()) {
-        // //Train
-        // if(qlearn->epsilon > 0.00000001f){
-        //     state_t S = qlearn_get_state(qlearn);
+    while (!WindowShouldClose()) 
+    {
+        // Train
+        state_t S = qlearn_get_state(qlearn);
 
-        //     while (!qlearn_is_ended(qlearn))
-        //     {
-        //         action_t a = qlearn_get_action(qlearn, S);
-        //         qvalue_t S_new = qlearn_apply_action(qlearn, a);
-        //         reward_t reward = qlearn->get_reward();
-        //         qvalue_t Q_max = qlearn_get_max_qvalue(qlearn, S_new);
-        //         qlearn_update_qvalue(qlearn, S, a, reward, Q_max);
+        while (!qlearn_is_ended(qlearn))
+        {
+            action_t a = qlearn_get_action(qlearn, S);
+            qvalue_t S_new = qlearn_apply_action(qlearn, a);
 
-        //         S = S_new;
+            if(qlearn->epsilon > 0.00000001f)
+            {
+                reward_t reward = qlearn->get_reward();
+                qvalue_t Q_max = qlearn_get_max_qvalue(qlearn, S_new);
+                qlearn_update_qvalue(qlearn, S, a, reward, Q_max);
+            }
 
-        //         /* Draw --------------------------------------------------------- */
+            S = S_new;
 
-                game_draw();
-            // }
-            // qlearn_restart(qlearn);
-        // }
-        
+            /* Draw --------------------------------------------------------- */
+
+            game_draw();
+        }
+        qlearn_restart(qlearn);
+        //qlearn_save_table(qlearn, "Save.txt");
     }
 
     qlearn_deinit(qlearn);
