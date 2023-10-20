@@ -21,7 +21,7 @@ typedef struct paddle {
 } paddle_t;
 
 static ball_t ball;
-#define MAX_BALL_SPEED 60
+#define MAX_BALL_SPEED 150
 const int ball_max_speed = MAX_BALL_SPEED;
 const float paddle_speed = MAX_BALL_SPEED * 5;
 static paddle_t paddle[2];
