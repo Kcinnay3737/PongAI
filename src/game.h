@@ -10,6 +10,10 @@ typedef enum move
     RIGHT
 } game_move_t;
 
+float GetPaddleUp(void);
+float GetPaddleDown(void);
+float GetCurrentDistance(void);
+
 /**
  * @brief Initialize game.
  *

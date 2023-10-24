@@ -23,7 +23,7 @@ typedef struct paddle {
 static ball_t ball;
 #define MAX_BALL_SPEED 150
 const int ball_max_speed = MAX_BALL_SPEED;
-const float paddle_speed = MAX_BALL_SPEED * 5;
+const float paddle_speed = MAX_BALL_SPEED * 3.0f;
 static paddle_t paddle[2];
 int score[] = {0,0};
 
@@ -36,10 +36,9 @@ static Vector2 paddle_dims = {.x=10,.y=40};
 #define REWARD_FAR_Y -10
 #define REWARD_SAME_Y 0
 
-#define REWARD_WIN +250
-#define REWARD_LOSE -250
-#define REWARD_CORNERHIT +100
-#define REWARD_MIDHIT +25
+#define REWARD_WIN 0
+#define REWARD_LOSE 0
+#define REWARD_HIT 0
 
 int CurrentReward = 0;
 
@@ -60,10 +59,13 @@ int check_collision(ball_t a, paddle_t b) {
 	return 1;
 }
 
+int DirHitPaddle0 = 1;
+int DirHitPaddle1 = 1;
+
 void move_ball(float dt) {
 	int w = GetScreenWidth();
     int h = GetScreenHeight();
-
+	
 	/* Move the ball by its motion vector. */
 	ball.x += ball.dx * ball_max_speed * dt;
 	ball.y += ball.dy * ball_max_speed * dt;
@@ -76,7 +78,7 @@ void move_ball(float dt) {
 		CurrentReward += REWARD_WIN;
 		round_restart();
 	}
-
+	
 	if (ball.x > w - ball.w) { 
 		
 		score[0] += 1;
@@ -84,21 +86,26 @@ void move_ball(float dt) {
 		CurrentReward += REWARD_LOSE;
 		round_restart();
 	}
-
+	
 	if (ball.y < 0 || ball.y > h - ball.h) {
 		
 		ball.dy = -ball.dy;
 	}
-
+	
 	//check for collision with the paddle
 	int i;
 
 	for (i = 0; i < 2; i++) {
 		
 		int c = check_collision(ball, paddle[i]); 
-
+		
 		//collision detected	
 		if (c == 1) {
+			if(i == 0)
+			{
+				DirHitPaddle0 = -DirHitPaddle0;
+			}
+			
 			int max_Xspeed = 20;
 			//ball moving left
 			if (ball.dx < 0 && ball.dx > -max_Xspeed) {
@@ -116,23 +123,6 @@ void move_ball(float dt) {
 			
 			//change ball angle based on where on the paddle it hit
 			int hit_pos = (paddle[i].y + paddle[i].h) - ball.y;
-
-			if(i == 1)
-			{
-				//Get hit reward
-				if(hit_pos >= 0 && hit_pos < 14)
-				{
-					CurrentReward += REWARD_CORNERHIT;
-				}
-				else if(hit_pos >= 14 && hit_pos < 46)
-				{
-					CurrentReward += REWARD_MIDHIT;
-				}
-				else if(hit_pos >= 46 && hit_pos <= 60)
-				{
-					CurrentReward += REWARD_CORNERHIT;
-				}
-			}
 
 			if (hit_pos >= 0 && hit_pos < 7) {
 				ball.dy = 4;
@@ -168,6 +158,20 @@ void move_ball(float dt) {
 
 			if (hit_pos >= 53 && hit_pos <= 60) {
 				ball.dy = -4;
+			}
+
+			if(i == 1)
+			{
+				//Get hit reward
+				CurrentReward += REWARD_HIT * abs(ball.dy);
+
+				//Change the new corner hit desired
+				DirHitPaddle1 = GetRandomValue(0, 1);
+				if(DirHitPaddle1 == 0)
+				{
+					DirHitPaddle1 = -1;
+				}
+				LastDistanceY = GetCurrentDistance();
 			}
 
             ball.dy += -1 + GetRandomValue(0,1) * 2; 
@@ -207,20 +211,49 @@ void move_paddle(int dir,int paddle_id){
 void move_paddle_ai(float dt, int paddle_id) {
 	int center = paddle[paddle_id].y + paddle[paddle_id].h * 0.5f;
 	int screen_center = GetScreenHeight() - paddle[paddle_id].h * 0.5f;
-    SetRandomSeed(time(0));
+    
+	SetRandomSeed(time(0));
     int r_dir = GetRandomValue(1,1);
-    int dir = ball.dy > 0 ? r_dir  : -r_dir;
-    if(dir < 0 && paddle[paddle_id].y < ball.y){
-        dir = r_dir;
+    int paddleDir = ball.dy > 0 ? r_dir  : -r_dir;
+    if(paddleDir < 0 && center < ball.y){
+        paddleDir = r_dir;
     }
 
-    if(dir > 0 && paddle[paddle_id].y > ball.y){
-        dir = -r_dir;
+    if(paddleDir > 0 && center > ball.y){
+        paddleDir = -r_dir;
     }
 
-	move_paddle(dir,paddle_id);
+	move_paddle(paddleDir,paddle_id);
 }
 
+//Move IA hardcore
+void move_paddle_ai_op(float dt, int paddle_id) 
+{
+	int offset = (paddle[paddle_id].h * 0.01f) * DirHitPaddle0;
+	int center = 0;
+	if(DirHitPaddle0 == 1)
+	{
+		center = paddle[paddle_id].y + offset;
+	}
+	else
+	{
+		center = paddle[paddle_id].y + paddle[paddle_id].h + offset;
+	}
+	
+	int ballCenter = ball.y + (ball.h * 0.5f);
+
+	int paddleDir = 0;
+	if(center < ballCenter)
+	{
+		paddleDir = 1;
+	}
+	else if(center > ballCenter)
+	{
+		paddleDir = -1;
+	}
+
+	move_paddle(paddleDir,paddle_id);
+}
 
 void game_init(void){
     
@@ -262,6 +295,7 @@ void game_draw(void)
 	else 
 	{
 		move_paddle_ai(dt,0);
+		//move_paddle_ai_op(dt, 0);
 	}
     //move_paddle_ai(dt,1);
     move_ball(dt);
@@ -302,8 +336,44 @@ void game_draw(void)
 void game_restart(void)
 {
 	round_restart();
+
+	//Reset the score
 	score[0] = 0;
 	score[1] = 0;
+}
+
+//Return up paddle up Y
+float GetPaddleUp(void)
+{
+	int offset = (paddle[1].h * 0.1f);
+	float PaddleY = paddle[1].y + offset;
+	return PaddleY;
+}
+
+//Return down paddle Y
+float GetPaddleDown(void)
+{
+	int offset = (paddle[1].h * 0.1f);
+	float PaddleY = paddle[1].y + paddle[1].h - offset;
+	return PaddleY;
+}
+
+//Return the distance between the ball and the current desired hit
+float GetCurrentDistance(void)
+{
+	float PaddleY = paddle[1].y + paddle[1].h * 0.5f;
+	if(DirHitPaddle1 == 1)
+	{
+		PaddleY = GetPaddleUp();
+	}
+	else
+	{
+		PaddleY = GetPaddleDown();
+	}
+
+	float BallY = ball.y + ball.h * 0.5f;
+	float CurrDistanceY = fabs(PaddleY - BallY);
+	return CurrDistanceY;
 }
 
 void round_restart(void)
@@ -321,16 +391,14 @@ void round_restart(void)
 	paddle[0].y = h * 0.5f - paddle_dims.y;
 	paddle[0].w = paddle_dims.x;
 	paddle[0].h = paddle_dims.y;
-
+	
 	paddle[1].x = w - paddle_dims.x;
 	paddle[1].y = h * 0.5f - paddle_dims.y;
 	paddle[1].w = paddle_dims.x;
 	paddle[1].h = paddle_dims.y;
-
+	
 	//Init the last distance between the ball and the paddle
-	float PaddleY = paddle[1].y + paddle[1].h * 0.5f;
-	float BallY = ball.y + ball.h * 0.5f;
-	LastDistanceY = fabs(PaddleY - BallY);
+	LastDistanceY = GetCurrentDistance();
 }
 
 /**
@@ -379,16 +447,14 @@ bool game_is_ended(void)
 uint16_t game_get_state(void)
 {
 	int16_t state = 0;
-    
-    float PaddleCenterY = paddle[1].y + paddle[1].h * 0.5f;
-    float BallCenterY = ball.y + ball.h * 0.5f;
 
-	//State on top with the ball
-    state |= (BallCenterY > PaddleCenterY) << 0;
-	//State align with the ball
-	state |= (BallCenterY == PaddleCenterY) << 1;
-	//State on bottom with the ball
-	state |= (BallCenterY < PaddleCenterY) << 2;
+	//State hit top corner, up and down of the ball
+    state |= (DirHitPaddle1 == 1 && ball.y + (ball.h * 0.5f) >= GetPaddleUp()) << 0;
+	state |= (DirHitPaddle1 == 1 && ball.y + (ball.h * 0.5f) < GetPaddleUp()) << 1;
+
+	//State hit bot corner, up and down of the ball
+    state |= (DirHitPaddle1 == -1 && ball.y + (ball.h * 0.5f) >= GetPaddleDown()) << 2;
+	state |= (DirHitPaddle1 == -1 && ball.y + (ball.h * 0.5f) < GetPaddleDown()) << 3;
 
     return state;
 }
@@ -405,9 +471,7 @@ int16_t game_get_reward(void)
 	CurrentReward = 0;
 
 	//Get the current distance between the ball and the paddle
-	float PaddleY = paddle[1].y + paddle[1].h * 0.5f;
-	float BallY = ball.y + ball.h * 0.5f;
-	float CurrDistanceY = fabs(PaddleY - BallY);
+	float CurrDistanceY = GetCurrentDistance();
 
 	//Check if the paddle is closer then the last frame
 	if(CurrDistanceY < LastDistanceY)
@@ -422,7 +486,15 @@ int16_t game_get_reward(void)
 	//Check if the paddle is the same distance then the last frame
 	else if(CurrDistanceY == LastDistanceY)
 	{
-		TempCurrentReward += REWARD_SAME_Y;
+		//If the distance with the ball is 0 return close reward
+		if(CurrDistanceY <= 0.0f)
+		{
+			TempCurrentReward += REWARD_CLOSE_Y;
+		}
+		else
+		{
+			TempCurrentReward += REWARD_SAME_Y;
+		}
 	}
 
 	LastDistanceY = CurrDistanceY;

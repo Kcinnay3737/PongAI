@@ -370,8 +370,6 @@ void raylib_start(void){
 	 							 .params = &qtable_conf};
 
 	qlearn_t *qlearn = qlearn_init(&qlearn_conf);
-
-    //qlearn_load_table(qlearn, "Save.txt");
     
     while (!WindowShouldClose()) 
     {
@@ -380,6 +378,15 @@ void raylib_start(void){
 
         while (!qlearn_is_ended(qlearn))
         {
+            if(IsKeyDown(KEY_L))
+            {
+                qlearn_load_table(qlearn, "Save.txt");
+            }
+            if(IsKeyDown(KEY_K))
+            {
+                qlearn_save_table(qlearn, "Save.txt");
+            }
+
             action_t a = qlearn_get_action(qlearn, S);
             qvalue_t S_new = qlearn_apply_action(qlearn, a);
 
@@ -397,7 +404,6 @@ void raylib_start(void){
             game_draw();
         }
         qlearn_restart(qlearn);
-        //qlearn_save_table(qlearn, "Save.txt");
     }
 
     qlearn_deinit(qlearn);
